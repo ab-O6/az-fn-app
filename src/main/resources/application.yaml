@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: blog-functions
+  main:
+    web-application-type: none
+app:
+  webhook:
+    signature:
+      enabled: ${WEBHOOK_SIGNATURE_ENABLED:true}
+      secret: ${WEBHOOK_HMAC_SECRET:}
+      header: ${WEBHOOK_SIGNATURE_HEADER:X-Signature}
+      timestamp-enabled: ${WEBHOOK_TIMESTAMP_ENABLED:true}
+      timestamp-header: ${WEBHOOK_TIMESTAMP_HEADER:X-Timestamp}
+      max-age-seconds: ${WEBHOOK_MAX_AGE_SECONDS:300}

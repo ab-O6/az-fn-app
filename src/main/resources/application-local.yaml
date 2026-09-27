@@ -1,0 +1,4 @@
+app:
+  webhook:
+    signature:
+      enabled: ${WEBHOOK_SIGNATURE_ENABLED:false}
