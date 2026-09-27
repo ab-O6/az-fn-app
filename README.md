@@ -45,11 +45,11 @@ On Windows, copy the same file and run `./scripts/run-local.ps1`. Scripts load l
 
 The example selects the `local` Spring profile and disables HMAC for development. To exercise authentication, set `WEBHOOK_SIGNATURE_ENABLED=true` and a real local secret. Keep `.env` and `local.settings.json` out of Git.
 
-### Known HTTP binding limitation
+### HTTP body encoding
 
-A live smoke test with Core Tools 4.15.1 starts the Java worker after `JAVA_HOME` is exported, but JSON requests fail before entering the HTTP adapter: the worker attempts to deserialize the body into `Optional<byte[]>` and reports `Expected BEGIN_ARRAY but was BEGIN_OBJECT`. The `dataType = "binary"` annotation does not force this runtime to deliver an `application/json` body as bytes.
+Send `application/json` encoded as **UTF-8 without a BOM**. The Azure Java worker binds JSON bodies as text; `HttpRequestMessage<Optional<byte[]>>` fails before the handler, even with `dataType = "binary"`. The adapter therefore uses `Optional<String>` and encodes the unchanged text as UTF-8 for HMAC validation before Jackson parsing. Whitespace and Unicode are preserved for this contract, and explicitly declared non-UTF-8 charsets return 415.
 
-The HTTP endpoint is therefore **not yet verified as operational on this runtime**, despite passing unit tests. Changing to a String binding would enable normal UTF-8 JSON, but would not guarantee access to the original bytes for every encoding/BOM case. The current byte binding is retained pending a decision on that original HMAC requirement; no authentication guarantee has been silently weakened.
+This is a limitation relative to the original arbitrary raw-byte requirement: the host decodes the body before Java receives it. The adapter cannot detect all original encodings, malformed byte sequences, or BOMs that the host has already transformed. If authentication must cover arbitrary wire bytes, it must happen at an ingress that exposes those bytes; this text binding cannot provide that guarantee.
 
 ### Startup troubleshooting
 
@@ -73,7 +73,7 @@ curl -i -X POST http://localhost:7071/api/blogs/review \
   }'
 ```
 
-`submitBlogForReview` receives binary bytes, authenticates them, parses strict JSON with Jackson 3, validates the DTO, maps it to the domain, and invokes the application port. Unknown fields, duplicate keys, trailing JSON, null bodies, and invalid constraints return 400. Responses use `application/json`.
+`submitBlogForReview` receives unchanged JSON text, authenticates its UTF-8 bytes, parses strict JSON with Jackson 3, validates the DTO, maps it to the domain, and invokes the application port. Unknown fields, duplicate keys, trailing JSON, null bodies, and invalid constraints return 400. Responses use `application/json`.
 
 | Status | Meaning |
 | --- | --- |
@@ -91,7 +91,7 @@ Production defaults enable HMAC and timestamp checks, and startup fails if the s
 
 - `X-Signature`: `sha256=` followed by exactly 64 hexadecimal characters.
 - `X-Timestamp`: Unix seconds in decimal. Future timestamps and ages above `WEBHOOK_MAX_AGE_SECONDS` (default 300) are rejected.
-- Signed message: ASCII timestamp, a literal `.`, then the **exact request bytes**. Secret encoding is UTF-8. Use HMAC-SHA256 and send the digest as hex.
+- Signed message: ASCII timestamp, a literal `.`, then the **UTF-8 request body bytes (no BOM)**. Secret encoding is UTF-8. Use HMAC-SHA256 and send the digest as hex.
 - With `WEBHOOK_TIMESTAMP_ENABLED=false`, sign just the body bytes and omit the timestamp.
 - Header names are configurable and matched case-insensitively; comparison uses `MessageDigest.isEqual`.
 

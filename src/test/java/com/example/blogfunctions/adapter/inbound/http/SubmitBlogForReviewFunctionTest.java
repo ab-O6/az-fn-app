@@ -24,7 +24,7 @@ class SubmitBlogForReviewFunctionTest {
     private final SubmitBlogForReviewUseCase useCase = mock(SubmitBlogForReviewUseCase.class);
     private final RequestSignatureValidator signatures = mock(RequestSignatureValidator.class);
     private final ExecutionContext context = mock(ExecutionContext.class);
-    private final HttpRequestMessage<Optional<byte[]>> request = mock();
+    private final HttpRequestMessage<Optional<String>> request = mock();
     private final HttpResponseMessage.Builder builder = mock(HttpResponseMessage.Builder.class, RETURNS_SELF);
     private final HttpResponseMessage response = mock(HttpResponseMessage.class);
     private SubmitBlogForReviewFunction function;
@@ -40,7 +40,7 @@ class SubmitBlogForReviewFunctionTest {
         when(context.getInvocationId()).thenReturn("test-invocation");
     }
     private void invoke(String body) {
-        when(request.getBody()).thenReturn(Optional.of(body.getBytes(StandardCharsets.UTF_8)));
+        when(request.getBody()).thenReturn(Optional.of(body));
         assertSame(response, function.run(request, context));
     }
     @Test void acceptsAndDelegatesAfterSignatureValidation() {
@@ -78,6 +78,25 @@ class SubmitBlogForReviewFunctionTest {
         verify(builder).body(body.capture());
         assertFalse(body.getValue().toString().contains("private-secret"));
         assertTrue(body.getValue().toString().contains("INTERNAL_ERROR"));
+    }
+    @Test void preservesUtf8WhitespaceAndUnicodeBeforeDeserialization() {
+        String body = "  \r\n" + VALID.replace("Blog", "Café ☕");
+        invoke(body);
+        var order = inOrder(signatures, useCase);
+        order.verify(signatures).validate(eq(body.getBytes(StandardCharsets.UTF_8)), anyMap());
+        order.verify(useCase).submit(new BlogSubmission("Café ☕", "Body", "Author", "web"));
+        verify(request).createResponseBuilder(HttpStatus.ACCEPTED);
+    }
+    @Test void rejectsNonUtf8CharsetBeforeAuthentication() {
+        when(request.getHeaders()).thenReturn(Map.of("Content-Type", "application/json; charset=utf-16"));
+        invoke(VALID);
+        verify(request).createResponseBuilder(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        verifyNoInteractions(signatures, useCase);
+    }
+    @Test void acceptsQuotedUtf8Charset() {
+        when(request.getHeaders()).thenReturn(Map.of("Content-Type", "application/json; charset=\"UTF-8\""));
+        invoke(VALID);
+        verify(request).createResponseBuilder(HttpStatus.ACCEPTED);
     }
     @Test void missingBodyIsBadRequest() {
         when(request.getBody()).thenReturn(Optional.empty());

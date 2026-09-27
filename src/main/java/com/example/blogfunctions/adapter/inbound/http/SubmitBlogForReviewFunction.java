@@ -10,6 +10,7 @@ import com.example.blogfunctions.support.validation.RequestValidator;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
 import java.time.Clock;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -39,8 +40,8 @@ public class SubmitBlogForReviewFunction {
     @FunctionName("submitBlogForReview")
     public HttpResponseMessage run(
             @HttpTrigger(name = "req", methods = HttpMethod.POST, route = "blogs/review",
-                    authLevel = AuthorizationLevel.ANONYMOUS, dataType = "binary")
-            HttpRequestMessage<Optional<byte[]>> request, ExecutionContext context) {
+                    authLevel = AuthorizationLevel.ANONYMOUS, dataType = "string")
+            HttpRequestMessage<Optional<String>> request, ExecutionContext context) {
         try {
             String contentType = request.getHeaders().entrySet().stream()
                     .filter(e -> e.getKey().equalsIgnoreCase("Content-Type"))
@@ -49,7 +50,17 @@ public class SubmitBlogForReviewFunction {
                 return error(request, HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
                         "Content-Type must be application/json", Map.of());
             }
-            byte[] raw = request.getBody().orElseGet(() -> new byte[0]);
+            for (String parameter : contentType.split(";")) {
+                String[] pair = parameter.trim().split("=", 2);
+                if (pair[0].equalsIgnoreCase("charset") && (pair.length != 2
+                        || !pair[1].trim().replace("\"", "").equalsIgnoreCase("utf-8"))) {
+                    return error(request, HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_CHARSET",
+                            "JSON requests must use UTF-8", Map.of());
+                }
+            }
+            // The Java worker delivers application/json as text, even with dataType=binary.
+            // Contract: UTF-8 JSON without BOM. Preserve whitespace; never reserialize for HMAC.
+            byte[] raw = request.getBody().orElse("").getBytes(StandardCharsets.UTF_8);
             signatures.validate(raw, request.getHeaders());
             SubmitBlogRequest dto;
             try {
