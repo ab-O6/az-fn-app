@@ -36,7 +36,7 @@ public class TopicOneEventFunction {
                 if (node == null || !node.isObject() || (node.has("id") && !node.get("id").isTextual())) {
                     throw new IllegalArgumentException("Invalid event shape");
                 }
-                event = new TopicOneEvent(node.has("id") ? node.get("id").asText() : null);
+                event = new TopicOneEvent(node.has("id") ? node.get("id").asText() : null, raw);
             } catch (JacksonException | IllegalArgumentException ex) {
                 // Deliberate initial poison-event policy: skip malformed events without logging payloads.
                 log.warn("Event outcome=rejected reason=invalid_json_object invocationId={}", context.getInvocationId());

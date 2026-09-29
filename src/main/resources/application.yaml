@@ -12,3 +12,7 @@ app:
       timestamp-enabled: ${WEBHOOK_TIMESTAMP_ENABLED:true}
       timestamp-header: ${WEBHOOK_TIMESTAMP_HEADER:X-Timestamp}
       max-age-seconds: ${WEBHOOK_MAX_AGE_SECONDS:300}
+  service-bus:
+    connection: ${SERVICE_BUS_CONNECTION:}
+    topic-name: ${SERVICE_BUS_TOPIC_NAME:generic_events}
+

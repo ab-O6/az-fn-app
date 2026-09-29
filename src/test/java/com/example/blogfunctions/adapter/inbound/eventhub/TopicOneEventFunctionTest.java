@@ -16,8 +16,8 @@ class TopicOneEventFunctionTest {
 
     @Test void delegatesValidEventsAndSkipsPoisonEvents() {
         function.run(List.of("{\"id\":\"one\",\"data\":123}", "broken", "[]", "null", "{\"id\":5}", "{}"), context);
-        verify(useCase).process(new TopicOneEvent("one"));
-        verify(useCase).process(new TopicOneEvent(null));
+        verify(useCase).process(new TopicOneEvent("one", "{\"id\":\"one\",\"data\":123}"));
+        verify(useCase).process(new TopicOneEvent(null, "{}"));
         verifyNoMoreInteractions(useCase);
     }
     @Test void processingFailurePropagatesToHostForRetry() {

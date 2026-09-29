@@ -9,6 +9,7 @@ A Java 25 Azure Functions runtime 4.x scaffold with Spring Boot as the dependenc
 - Azure Functions Core Tools 4.x with Java 25 support, and Azure CLI.
 - Azurite running for `UseDevelopmentStorage=true`, or a development Azure Storage connection.
 - An Event Hubs namespace, the `topic_one` entity, and a consumer group.
+- An Azure Service Bus namespace and the `generic_events` topic entity.
 
 Java 25 is GA for Functions 4.x. Use a Java-25-capable Linux plan, such as Flex Consumption or Premium; **Linux Consumption supports Java only through 21**. Configure the existing Azure app's stack to Java 25—packaging alone does not change its runtime. [Azure runtime support](https://learn.microsoft.com/en-us/azure/azure-functions/functions-versions)
 
@@ -19,7 +20,8 @@ Java 25 is GA for Functions 4.x. Use a Java-25-capable Linux plan, such as Flex 
 ./mvnw dependency:tree
 ```
 
-Verified against Maven Central on 2026-09-28: Boot **4.0.8**, Cloud **2025.1.3**, BOM-managed Function **5.0.4**, Azure Java Library **3.3.0**, Azure Maven Plugin **1.42.0**. Boot manages Jackson 3 and JUnit 6. No Spring Cloud Stream, Event Hub client SDK, binder, MVC/WebFlux server, or Spring Cloud Azure is needed.
+Verified against Maven Central on 2026-09-28: Boot **4.0.8**, Cloud **2025.1.3**, BOM-managed Function **5.0.4**, Azure Java Library **3.3.0**, Azure Maven Plugin **1.42.0**, Azure Messaging Service Bus **7.17.9**. Boot manages Jackson 3 and JUnit 6. No Spring Cloud Stream, Event Hub client SDK, binder, MVC/WebFlux server, or Spring Cloud Azure is needed.
+
 
 Sources: [Boot release](https://spring.io/blog/2026/08/20/spring-boot-4-0-8-available-now/), [Cloud compatibility](https://spring.io/blog/2026/08/20/spring-cloud-2025-1-3-has-been-released/), [Azure integration and packaging](https://docs.spring.io/spring-cloud-function/reference/adapters/azure-intro.html), [library metadata](https://repo.maven.apache.org/maven2/com/microsoft/azure/functions/azure-functions-java-library/maven-metadata.xml), [plugin metadata](https://repo.maven.apache.org/maven2/com/microsoft/azure/azure-functions-maven-plugin/maven-metadata.xml).
 
@@ -125,26 +127,37 @@ Timestamp checks limit replay age; they do not deduplicate requests within the w
 | `EVENT_HUB_CONNECTION` | Local namespace connection string with Listen access |
 | `AzureWebJobsStorage` | Host storage used for checkpoints and coordination |
 
-`topicOneEventProcessor` accepts batches of JSON objects, for example `{"id":"event-123","data":{"example":true}}`. `id` is optional and must be a string when supplied. Extra event fields are permitted and ignored by this initial model. Each valid object reaches `ProcessTopicOneEventUseCase`. Logs include batch size, invocation ID, and outcomes, never the event body.
+`topicOneEventProcessor` accepts batches of JSON objects, for example `{"id":"event-123","data":{"example":true}}`. `id` is optional and must be a string when supplied. Extra event fields are permitted and preserved in the event payload. Each valid object reaches `ProcessTopicOneEventUseCase`, which forwards the consumed message payload to the Service Bus topic `generic_events` via the `PublishGenericEventPort` outbound port. Logs include batch size, invocation ID, event ID, and outcomes, never the event body.
 
 Malformed events are deliberately skipped with a warning; this initial policy drops those events. Processing failures propagate to the host, which retries the batch up to five times at ten-second intervals. Delivery is at least once: earlier events in a failed batch can repeat. After retries are exhausted the host can advance past the failed batch. Before durable business processing, implement idempotency and a quarantine/recovery policy appropriate to the application. Azure owns partition assignment, polling, checkpoints, lifecycle, and scaling. [Retry and checkpoint behavior](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reliable-event-processing)
 
 To move to managed identity, remove the exact `EVENT_HUB_CONNECTION` connection-string setting and configure `EVENT_HUB_CONNECTION__fullyQualifiedNamespace=<namespace>.servicebus.windows.net`, plus `EVENT_HUB_CONNECTION__credential=managedidentity` in Azure. Grant the identity **Azure Event Hubs Data Receiver** at the appropriate scope. Host storage needs its own connection/identity permissions. No domain/application changes or Spring Cloud Azure dependency are required. [Identity connections](https://learn.microsoft.com/en-us/azure/azure-functions/manage-connections)
 
+## Service Bus
+
+Consumed events are forwarded to the `generic_events` Service Bus topic by `ProcessTopicOneEventService` through the outbound port `PublishGenericEventPort`.
+
+| Host or Spring setting | Purpose |
+| --- | --- |
+| `SERVICE_BUS_TOPIC_NAME` | Downstream topic name (defaults to `generic_events`) |
+| `SERVICE_BUS_CONNECTION` | Service Bus connection string with Send permissions |
+
+The outbound adapter (`ServiceBusGenericEventPublisher`) formats each message with `application/json` content type and sets `messageId` to the event's `id` (when present) to facilitate deduplication in Service Bus. Publishing errors propagate back up to the Functions host retry policy. Payloads and connection strings remain excluded from application logs.
+
 ## Configuration model
 
 | File or setting | Responsibility |
 | --- | --- |
-| `application.yaml` | Spring/application defaults; safe production authentication defaults |
+| `application.yaml` | Spring/application defaults; safe production authentication defaults, Service Bus topic defaults |
 | `application-local.yaml` | Local-only Spring overrides |
 | `.env` | Ignored developer environment and secrets, loaded by scripts |
 | Azure Function App settings | Deployed environment configuration and secrets; prefer Key Vault references/managed identity as appropriate |
 | `host.json` | Azure host and extension bundle configuration |
 | `local.settings.json` | Minimal Core Tools settings; generated locally, ignored |
 
-`%EVENT_HUB_NAME%`, `%EVENT_HUB_CONSUMER_GROUP%`, and the `EVENT_HUB_CONNECTION` prefix are resolved by the **Functions host**, before Spring runs. Set them in the script-exported environment locally and Function App settings in Azure. Spring YAML cannot supply trigger binding values, so these settings are intentionally not duplicated there.
+`%EVENT_HUB_NAME%`, `%EVENT_HUB_CONSUMER_GROUP%`, and the `EVENT_HUB_CONNECTION` prefix are resolved by the **Functions host**, before Spring runs. `SERVICE_BUS_CONNECTION` and `SERVICE_BUS_TOPIC_NAME` are loaded by Spring through `application.yaml` via environment variables. Set them in the script-exported environment locally and Function App settings in Azure.
 
-For Azure, configure `FUNCTIONS_WORKER_RUNTIME=java`, `FUNCTIONS_EXTENSION_VERSION=~4`, host storage, the three Event Hub settings, and `WEBHOOK_HMAC_SECRET`. Keep the `local` profile and local signature-disable flags out of production. The existing GitHub workflow builds with Java 25 and deploys the generated Functions package to `fn-one` using its configured publish-profile secret; infrastructure and app settings must already exist.
+For Azure, configure `FUNCTIONS_WORKER_RUNTIME=java`, `FUNCTIONS_EXTENSION_VERSION=~4`, host storage, the three Event Hub settings, the two Service Bus settings, and `WEBHOOK_HMAC_SECRET`. Keep the `local` profile and local signature-disable flags out of production. The existing GitHub workflow builds with Java 25 and deploys the generated Functions package to `fn-one` using its configured publish-profile secret; infrastructure and app settings must already exist.
 
 ## Tests
 

@@ -1,7 +1,8 @@
 {
   "recommendations": [
-    "vscjava.vscode-java-pack",
     "ms-azuretools.vscode-azurefunctions",
+    "vscjava.vscode-java-debug",
+    "vscjava.vscode-java-pack",
     "vscjava.vscode-maven"
   ]
 }
