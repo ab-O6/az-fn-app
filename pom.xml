@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>[4.1, 4.2)</version>
+    <version>[4.1, 4.1.9]</version>
     <relativePath />
   </parent>
   <groupId>com.example</groupId>
@@ -22,6 +22,7 @@
     <azure-functions-maven-plugin.version>1.42.0</azure-functions-maven-plugin.version>
     <azure-messaging-servicebus.version>7.17.9</azure-messaging-servicebus.version>
     <azure-identity.version>1.18.4</azure-identity.version>
+    <azure-core-http-jdk-httpclient.version>1.2.0</azure-core-http-jdk-httpclient.version>
     <functionAppName>fn-one</functionAppName>
     <start-class>com.example.blogfunctions.BlogFunctionsApplication</start-class>
 
@@ -62,6 +63,16 @@
     <dependency>
       <groupId>org.springframework.cloud</groupId>
       <artifactId>spring-cloud-function-context</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-web-server</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-restclient</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.springframework.cloud</groupId>
@@ -76,11 +87,28 @@
       <groupId>com.azure</groupId>
       <artifactId>azure-messaging-servicebus</artifactId>
       <version>${azure-messaging-servicebus.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.azure</groupId>
+          <artifactId>azure-core-http-netty</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-core-http-jdk-httpclient</artifactId>
+      <version>${azure-core-http-jdk-httpclient.version}</version>
     </dependency>
     <dependency>
       <groupId>com.azure</groupId>
       <artifactId>azure-identity</artifactId>
       <version>${azure-identity.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.azure</groupId>
+          <artifactId>azure-core-http-netty</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
