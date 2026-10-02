@@ -4,6 +4,8 @@ spring:
   main:
     web-application-type: none
 app:
+  azure:
+    client-id: ${AZURE_CLIENT_ID:}
   webhook:
     signature:
       enabled: ${WEBHOOK_SIGNATURE_ENABLED:true}

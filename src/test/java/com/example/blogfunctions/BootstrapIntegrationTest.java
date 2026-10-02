@@ -19,6 +19,7 @@ class BootstrapIntegrationTest {
                 .run("--app.webhook.signature.enabled=false")) {
             assertNotNull(context.getBean(SubmitBlogForReviewFunction.class));
             assertNotNull(context.getBean(TopicOneEventFunction.class));
+            assertNotNull(context.getBean(com.azure.core.credential.TokenCredential.class));
         }
     }
 
