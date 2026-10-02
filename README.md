@@ -123,15 +123,17 @@ Timestamp checks limit replay age; they do not deduplicate requests within the w
 | Host setting | Purpose |
 | --- | --- |
 | `EVENT_HUB_NAME` | Entity name; use `topic_one` |
-| `EVENT_HUB_CONSUMER_GROUP` | Existing consumer group, locally `$Default`; use a dedicated group per deployed consumer |
-| `EVENT_HUB_CONNECTION` | Local namespace connection string with Listen access |
-| `AzureWebJobsStorage` | Host storage used for checkpoints and coordination |
+| `EVENT_HUB_CONSUMER_GROUP` | Existing consumer group, locally `Local` or `$Default`; use a dedicated group per deployed consumer |
+| `EVENT_HUB_CONNECTION__fullyQualifiedNamespace` | Namespace host, e.g. `axb2evh.servicebus.windows.net` |
+| `EVENT_HUB_CONNECTION__credential` | Set to `azurecli` for local dev or `managedidentity` in Azure |
+| `EVENT_HUB_CONNECTION__clientId` | (Azure only) Client ID of user-assigned managed identity |
+| `AzureWebJobsStorage` | Host storage used for checkpoints and coordination (Azurite locally or identity in Azure) |
 
 `topicOneEventProcessor` accepts batches of JSON objects, for example `{"id":"event-123","data":{"example":true}}`. `id` is optional and must be a string when supplied. Extra event fields are permitted and preserved in the event payload. Each valid object reaches `ProcessTopicOneEventUseCase`, which forwards the consumed message payload to the Service Bus topic `generic_events` via the `PublishGenericEventPort` outbound port. Logs include batch size, invocation ID, event ID, and outcomes, never the event body.
 
 Malformed events are deliberately skipped with a warning; this initial policy drops those events. Processing failures propagate to the host, which retries the batch up to five times at ten-second intervals. Delivery is at least once: earlier events in a failed batch can repeat. After retries are exhausted the host can advance past the failed batch. Before durable business processing, implement idempotency and a quarantine/recovery policy appropriate to the application. Azure owns partition assignment, polling, checkpoints, lifecycle, and scaling. [Retry and checkpoint behavior](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reliable-event-processing)
 
-To move to managed identity, remove the exact `EVENT_HUB_CONNECTION` connection-string setting and configure `EVENT_HUB_CONNECTION__fullyQualifiedNamespace=<namespace>.servicebus.windows.net`, plus `EVENT_HUB_CONNECTION__credential=managedidentity` in Azure. Grant the identity **Azure Event Hubs Data Receiver** at the appropriate scope. Host storage needs its own connection/identity permissions. No domain/application changes or Spring Cloud Azure dependency are required. [Identity connections](https://learn.microsoft.com/en-us/azure/azure-functions/manage-connections)
+Authentication uses identity connections: in Azure, `EVENT_HUB_CONNECTION__credential=managedidentity` with `EVENT_HUB_CONNECTION__clientId`. Locally, `EVENT_HUB_CONNECTION__credential=azurecli` authenticates using your active `az login` session. Grant the identity **Azure Event Hubs Data Receiver** on the Event Hubs namespace. Host storage needs its own connection/identity permissions. [Identity connections](https://learn.microsoft.com/en-us/azure/azure-functions/manage-connections)
 
 ## Service Bus
 
@@ -140,7 +142,11 @@ Consumed events are forwarded to the `generic_events` Service Bus topic by `Proc
 | Host or Spring setting | Purpose |
 | --- | --- |
 | `SERVICE_BUS_TOPIC_NAME` | Downstream topic name (defaults to `generic_events`) |
-| `SERVICE_BUS_CONNECTION` | Service Bus connection string with Send permissions |
+| `SERVICE_BUS_NAMESPACE` | Service Bus fully qualified namespace, e.g. `axb2asb.servicebus.windows.net` |
+| `AZURE_CLIENT_ID` | (Azure only) Client ID of user-assigned managed identity |
+| `SERVICE_BUS_CONNECTION` | (Legacy fallback) Connection string with Send permissions |
+
+`ServiceBusConfiguration` uses `DefaultAzureCredential` when `SERVICE_BUS_NAMESPACE` is provided. Locally, `DefaultAzureCredential` authenticates via `az-cli` (`az login`). On Azure, it uses the user-assigned managed identity specified by `AZURE_CLIENT_ID`. Grant the identity **Azure Service Bus Data Sender** on the Service Bus namespace.
 
 The outbound adapter (`ServiceBusGenericEventPublisher`) formats each message with `application/json` content type and sets `messageId` to the event's `id` (when present) to facilitate deduplication in Service Bus. Publishing errors propagate back up to the Functions host retry policy. Payloads and connection strings remain excluded from application logs.
 
@@ -151,13 +157,13 @@ The outbound adapter (`ServiceBusGenericEventPublisher`) formats each message wi
 | `application.yaml` | Spring/application defaults; safe production authentication defaults, Service Bus topic defaults |
 | `application-local.yaml` | Local-only Spring overrides |
 | `.env` | Ignored developer environment and secrets, loaded by scripts |
-| Azure Function App settings | Deployed environment configuration and secrets; prefer Key Vault references/managed identity as appropriate |
+| Azure Function App settings | Deployed environment configuration; user-assigned managed identity settings |
 | `host.json` | Azure host and extension bundle configuration |
 | `local.settings.json` | Minimal Core Tools settings; generated locally, ignored |
 
-`%EVENT_HUB_NAME%`, `%EVENT_HUB_CONSUMER_GROUP%`, and the `EVENT_HUB_CONNECTION` prefix are resolved by the **Functions host**, before Spring runs. `SERVICE_BUS_CONNECTION` and `SERVICE_BUS_TOPIC_NAME` are loaded by Spring through `application.yaml` via environment variables. Set them in the script-exported environment locally and Function App settings in Azure.
+`%EVENT_HUB_NAME%`, `%EVENT_HUB_CONSUMER_GROUP%`, and the `EVENT_HUB_CONNECTION` prefix are resolved by the **Functions host**, before Spring runs. `SERVICE_BUS_NAMESPACE` and `SERVICE_BUS_TOPIC_NAME` are loaded by Spring through `application.yaml` via environment variables. Set them in the script-exported environment locally and Function App settings in Azure.
 
-For Azure, configure `FUNCTIONS_WORKER_RUNTIME=java`, `FUNCTIONS_EXTENSION_VERSION=~4`, host storage, the three Event Hub settings, the two Service Bus settings, and `WEBHOOK_HMAC_SECRET`. Keep the `local` profile and local signature-disable flags out of production. The existing GitHub workflow builds with Java 25 and deploys the generated Functions package to `fn-one` using its configured publish-profile secret; infrastructure and app settings must already exist.
+For Azure, configure `FUNCTIONS_WORKER_RUNTIME=java`, `FUNCTIONS_EXTENSION_VERSION=~4`, host storage, the Event Hub identity settings, the Service Bus identity settings (`SERVICE_BUS_NAMESPACE`, `AZURE_CLIENT_ID`), and `WEBHOOK_HMAC_SECRET`. Keep the `local` profile and local signature-disable flags out of production. The existing GitHub workflow builds with Java 25 and deploys the generated Functions package to `fn-one` using its configured publish-profile secret; infrastructure and app settings must already exist.
 
 ## Tests
 

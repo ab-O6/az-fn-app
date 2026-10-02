@@ -1,6 +1,32 @@
+// NOTE: When running or debugging via VS Code ('Attach to Java Functions' or the 'func: host start' task),
+// Azure Functions Core Tools runs directly without executing scripts/run-local.sh and does NOT source .env.
+// All configuration variables from .env must be defined in the 'Values' section below so the host
+// runtime can resolve binding expressions (such as %EVENT_HUB_NAME% and %EVENT_HUB_CONSUMER_GROUP%)
+// and Spring application properties.
 {
   "IsEncrypted": false,
   "Values": {
-    "FUNCTIONS_WORKER_RUNTIME": "java"
+    "FUNCTIONS_WORKER_RUNTIME": "java",
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+    "SPRING_PROFILES_ACTIVE": "local",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+
+    // Inbound Event Hub (identity-based connection; authenticate locally via `az login`)
+    "EVENT_HUB_NAME": "<event-hub-name>",
+    "EVENT_HUB_CONSUMER_GROUP": "$Default",
+    "EVENT_HUB_CONNECTION__fullyQualifiedNamespace": "<your-event-hubs-namespace>.servicebus.windows.net",
+    "EVENT_HUB_CONNECTION__credential": "azurecli",
+
+    // Outbound Service Bus (identity-based; authenticate locally via `az login`)
+    "SERVICE_BUS_TOPIC_NAME": "<service-bus-topic-name>",
+    "SERVICE_BUS_NAMESPACE": "<your-service-bus-namespace>.servicebus.windows.net",
+
+    // Webhook Security & Verification
+    "WEBHOOK_SIGNATURE_ENABLED": "false",
+    "WEBHOOK_HMAC_SECRET": "<local-secret>",
+    "WEBHOOK_SIGNATURE_HEADER": "X-Signature",
+    "WEBHOOK_TIMESTAMP_ENABLED": "true",
+    "WEBHOOK_TIMESTAMP_HEADER": "X-Timestamp",
+    "WEBHOOK_MAX_AGE_SECONDS": "300"
   }
 }

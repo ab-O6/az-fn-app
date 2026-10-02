@@ -13,6 +13,8 @@ app:
       timestamp-header: ${WEBHOOK_TIMESTAMP_HEADER:X-Timestamp}
       max-age-seconds: ${WEBHOOK_MAX_AGE_SECONDS:300}
   service-bus:
+    namespace: ${SERVICE_BUS_NAMESPACE:}
+    client-id: ${AZURE_CLIENT_ID:${SERVICE_BUS_CLIENT_ID:}}
     connection: ${SERVICE_BUS_CONNECTION:}
     topic-name: ${SERVICE_BUS_TOPIC_NAME:generic_events}
 
