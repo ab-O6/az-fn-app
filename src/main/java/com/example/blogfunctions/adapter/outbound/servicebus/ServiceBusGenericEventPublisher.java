@@ -49,7 +49,7 @@ public class ServiceBusGenericEventPublisher implements PublishGenericEventPort 
             message.setMessageId(id);
         }
 
-        message.getApplicationProperties().put("Diagnostic-Id", traceIds.get(random.nextInt(0, 5)));
+        message.getApplicationProperties().put("traceparent", traceIds.get(random.nextInt(0, 5)));
         senderClient.sendMessage(message);
         log.info("Service bus message published topic={} eventId={}", senderClient.getEntityPath(), id);
     }
