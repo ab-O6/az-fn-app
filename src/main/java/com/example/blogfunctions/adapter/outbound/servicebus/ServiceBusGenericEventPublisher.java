@@ -1,6 +1,7 @@
 package com.example.blogfunctions.adapter.outbound.servicebus;
 
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -48,9 +49,12 @@ public class ServiceBusGenericEventPublisher implements PublishGenericEventPort 
         if (id != null && !id.isBlank()) {
             message.setMessageId(id);
         }
-
-        message.getApplicationProperties().put("traceparent", traceIds.get(random.nextInt(0, 5)));
+        String traceparent = traceIds.get(random.nextInt(0, 5));
+        message.getApplicationProperties().put("traceparent", traceparent);
+        message.getApplicationProperties().put("Diagnostic-Id", traceparent);
+        message.getApplicationProperties().put("timestamp", Instant.now().toEpochMilli());
         senderClient.sendMessage(message);
-        log.info("Service bus message published topic={} eventId={}", senderClient.getEntityPath(), id);
+        log.info("Service bus message published topic={} eventId={} traceparent={}", senderClient.getEntityPath(), id,
+                traceparent);
     }
 }
